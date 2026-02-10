@@ -1,0 +1,37 @@
+[
+  {
+    "name": "getTime",
+    "synonyms": ["сколько времени", "который час"],
+    "external": true
+  },
+  {
+    "name": "latex",
+    "synonyms": ["формула латех"],
+    "external": true
+  },
+  {
+    "name": "undo",
+    "synonyms": ["отмена", "отмени"]
+  },
+  {
+    "name": "addParagraph",
+    "synonyms": ["новый абзац", "новый параграф", "новая строка"]
+  },
+  {
+    "name": "saveNote",
+    "synonyms": ["сохранить текст", "сохранить запись"]
+  },
+  {
+    "name": "clearNote",
+    "synonyms": ["удали текст", "удали запись"]
+  },
+  {
+    "name": "recordStart",
+    "synonyms": ["начать запись", "старт запись"]
+  },
+  {
+    "name": "recordStop",
+    "synonyms": ["стоп запись"]
+  }
+
+]
