@@ -1,37 +1,40 @@
 [
   {
     "name": "getTime",
-    "synonyms": ["сколько времени", "который час"],
+    "text": "который час",
     "external": true
   },
   {
     "name": "latex",
-    "synonyms": ["формула латех"],
+    "text": "напиши латех",
     "external": true
   },
   {
     "name": "undo",
-    "synonyms": ["отмена", "отмени"]
+    "text": "отмени пожалуйста"
+  },
+  {
+    "name": "repeatCommand",
+    "text": "выполни команду"
   },
   {
     "name": "addParagraph",
-    "synonyms": ["новый абзац", "новый параграф", "новая строка"]
+    "text": "новый параграф"
   },
   {
     "name": "saveNote",
-    "synonyms": ["сохранить текст", "сохранить запись"]
+    "text": "сохранить запись"
   },
   {
     "name": "clearNote",
-    "synonyms": ["удали текст", "удали запись"]
+    "text": "удали текст"
   },
   {
     "name": "recordStart",
-    "synonyms": ["начать запись", "старт запись"]
+    "text": "начать запись"
   },
   {
     "name": "recordStop",
-    "synonyms": ["стоп запись"]
+    "text": "стоп запись"
   }
-
 ]

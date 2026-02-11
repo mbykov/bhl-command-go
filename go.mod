@@ -1,4 +1,4 @@
-module command
+module github.com/mbykov/bhl-command-go
 
 go 1.25.6
 
