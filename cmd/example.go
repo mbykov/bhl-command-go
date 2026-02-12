@@ -1,56 +1,71 @@
 package main
 
 import (
-    "fmt"
-    "log"
+	"fmt"
+	"log"
+	"strings"
 
-    "github.com/mbykov/bhl-command-go"
+	"github.com/chzyer/readline"
+	"github.com/mbykov/bhl-command-go"
 )
 
 func main() {
-    engine, err := command.NewSearchEngine(
-        "../Models/multilingual-e5-small/onnx/model.onnx",
-        "../Models/multilingual-e5-small/tokenizer.json",
-        "/home/michael/go/ort/lib/libonnxruntime.so",
-        0.80,
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer engine.Close()
+	engine, err := command.NewSearchEngine(
+		"../Models/multilingual-e5-small/onnx/model.onnx",
+		"../Models/multilingual-e5-small/tokenizer.json",
+		"/home/michael/go/ort/lib/libonnxruntime.so",
+		0.92, // рекомендованный порог
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer engine.Close()
 
-    if err := engine.LoadCommands("./data/commands-syn.json"); err != nil {
-        log.Fatal(err)
-    }
+	if err := engine.LoadCommands("./data/commands-syn.json"); err != nil {
+		log.Fatal(err)
+	}
 
-    phrases := []string{
-        "стоп запись",
-        "стоп машина",
-        "прекратить запись",
-        "стоп текст",
-        "начать записывать",
-        "начать работу",
-        "убей запись",
-        "сколько времени",
-        "неизвестная фраза",
-        "покажи латех",
-        "съешь латех",
-        "формула латех",
-        "сформируй латех",
-        "нарисуй латех",
-    }
+	fmt.Println("✅ Модель загружена, команды проиндексированы.")
+	fmt.Println("📜 История команд сохраняется (стрелки вверх/вниз).")
+	fmt.Println("Введите фразу (минимум 2 слова) или 'exit' для выхода:")
 
-    for _, phrase := range phrases {
-        result, err := engine.FindCommand(phrase)
-        if err != nil {
-            fmt.Printf("Error for %q: %v\n", phrase, err)
-            continue
-        }
-        if result == nil {
-            fmt.Printf("No match for: %q\n", phrase)
-        } else {
-            fmt.Printf("example: %q\n  -> command: %s, текст: %s,  Score: %.4f\n", //, External: %v
-                phrase, result.Name, result.Synonyms, result.Score) // , result.External
-        }
-    }
+	rl, err := readline.New("> ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rl.Close()
+
+	for {
+		line, err := rl.Readline()
+		if err != nil { // EOF, Ctrl+D, Ctrl+C
+			break
+		}
+		phrase := strings.TrimSpace(line)
+		if phrase == "" {
+			continue
+		}
+		if phrase == "exit" || phrase == "quit" {
+			fmt.Println("Выход.")
+			break
+		}
+
+		result, err := engine.FindCommand(phrase)
+		if err != nil {
+			fmt.Printf("❌ Ошибка: %v\n", err)
+			continue
+		}
+		if result == nil {
+			// if len(strings.Fields(phrase)) < 2 {
+			// 	fmt.Printf("❌ Слишком короткая фраза (менее 2 слов).\n")
+			// } else {
+			// 	fmt.Printf("❌ Команда не найдена.\n")
+			// }
+            fmt.Printf("❌ Команда не найдена.\n")
+		} else {
+			fmt.Printf("✅ Найдена команда: %s\n", result.Name)
+			fmt.Printf("   Синонимы: %v\n", result.Synonyms)
+			fmt.Printf("   Внешняя: %v\n", result.External)
+			fmt.Printf("   Сходство: %.4f\n", result.Score)
+		}
+	}
 }

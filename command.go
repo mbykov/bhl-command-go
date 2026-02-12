@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 
 	ort "github.com/yalue/onnxruntime_go"
 	"github.com/sugarme/tokenizer"
-	"github.com/sugarme/tokenizer/pretrained" // ← правильный импорт!
+	"github.com/sugarme/tokenizer/pretrained"
 )
 
 type CommandMapping struct {
-	Name      string   `json:"name"`
-	Synonyms  []string `json:"synonyms"`
-	External  bool     `json:"external"`
-	Score     float32  `json:"score,omitempty"`
+	Name     string   `json:"name"`
+	Synonyms []string `json:"synonyms"`
+	External bool     `json:"external"`
+	Score    float32  `json:"score,omitempty"`
 }
 
 type synonymEntry struct {
@@ -40,7 +41,6 @@ func NewSearchEngine(onnxPath, tokenizerPath, libPath string, threshold float32)
 		return nil, fmt.Errorf("init ORT: %w", err)
 	}
 
-	// ✅ Загружаем токенизатор из tokenizer.json (работает для XLM‑R, BERT и др.)
 	tk, err := pretrained.FromFile(tokenizerPath)
 	if err != nil {
 		ort.DestroyEnvironment()
@@ -91,7 +91,6 @@ func (se *SearchEngine) determineHiddenSize() error {
 	types, _ := ort.NewTensor(shape, repeatInt64(0, int(seqLen)))
 	defer types.Destroy()
 
-	// Временный тензор — размер 384 (типичен для e5‑small)
 	outputData := make([]float32, 1*seqLen*384)
 	outputTensor, _ := ort.NewTensor(ort.NewShape(1, seqLen, 384), outputData)
 	defer outputTensor.Destroy()
@@ -100,7 +99,6 @@ func (se *SearchEngine) determineHiddenSize() error {
 		return fmt.Errorf("inference: %w", err)
 	}
 
-	// ✅ GetShape() — правильный метод для получения размерности тензора
 	shapeActual := outputTensor.GetShape()
 	if len(shapeActual) != 3 {
 		return fmt.Errorf("unexpected shape: %v", shapeActual)
@@ -119,7 +117,8 @@ func (se *SearchEngine) Close() error {
 	return err
 }
 
-// LoadCommands — читает JSON, вычисляет и нормализует эмбеддинги синонимов.
+// LoadCommands — читает JSON, добавляет префикс "passage: " к каждому синониму,
+// вычисляет и нормализует эмбеддинги.
 func (se *SearchEngine) LoadCommands(jsonPath string) error {
 	data, err := os.ReadFile(jsonPath)
 	if err != nil {
@@ -136,7 +135,11 @@ func (se *SearchEngine) LoadCommands(jsonPath string) error {
 
 	for cmdIdx, cmd := range cmds {
 		for _, syn := range cmd.Synonyms {
-			emb, err := se.getEmbedding(syn)
+			if strings.TrimSpace(syn) == "" {
+				continue
+			}
+			prefixed := "passage: " + syn
+			emb, err := se.getEmbedding(prefixed)
 			if err != nil {
 				return fmt.Errorf("embedding for %q: %w", syn, err)
 			}
@@ -150,13 +153,19 @@ func (se *SearchEngine) LoadCommands(jsonPath string) error {
 }
 
 // FindCommand — поиск команды по фразе.
+// Возвращает nil, если фраза состоит менее чем из двух слов.
 func (se *SearchEngine) FindCommand(phrase string) (*CommandMapping, error) {
+	// 1. Проверка на минимальное количество слов (2+)
+	if len(strings.Fields(phrase)) < 2 {
+		return nil, nil
+	}
+
 	if len(se.synonyms) == 0 {
 		return nil, fmt.Errorf("no commands loaded")
 	}
 
-    phrase = "query: " + phrase
-	queryEmb, err := se.getEmbedding(phrase)
+	prefixedPhrase := "query: " + phrase
+	queryEmb, err := se.getEmbedding(prefixedPhrase)
 	if err != nil {
 		return nil, fmt.Errorf("query embedding: %w", err)
 	}
@@ -189,11 +198,8 @@ func (se *SearchEngine) FindCommand(phrase string) (*CommandMapping, error) {
 // --- Внутренние утилиты ------------------------------------------------------
 
 func (se *SearchEngine) getEmbedding(text string) ([]float32, error) {
-    prefixedText := "query: " + text
-    enc, err := se.Tokenizer.EncodeSingle(prefixedText)
-	// enc, err := se.Tokenizer.EncodeSingle(text)
-
-    if err != nil {
+	enc, err := se.Tokenizer.EncodeSingle(text)
+	if err != nil {
 		return nil, fmt.Errorf("encode: %w", err)
 	}
 	if len(enc.Ids) == 0 {
