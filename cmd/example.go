@@ -21,7 +21,7 @@ func main() {
 	}
 	defer engine.Close()
 
-	if err := engine.LoadCommands("./data/commands-syn.json"); err != nil {
+	if err := engine.LoadCommands("./data/commands.json"); err != nil {
 		log.Fatal(err)
 	}
 
