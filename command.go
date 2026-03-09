@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 
 	ort "github.com/yalue/onnxruntime_go"
 	"github.com/sugarme/tokenizer"
@@ -32,18 +33,40 @@ type SearchEngine struct {
 	synonyms   []synonymEntry
 	threshold  float32
 	hiddenSize int
+	libPath    string // сохраняем путь для возможного повторного использования
+}
+
+// Глобальные переменные для однократной инициализации ORT
+var (
+    ortOnce     sync.Once
+    ortInitErr  error
+    ortLibPath  string
+)
+
+// ensureONNXInitialized гарантирует, что ONNX Runtime инициализирован ровно один раз
+func ensureONNXInitialized(libPath string) error {
+    ortOnce.Do(func() {
+        ortLibPath = libPath
+        ort.SetSharedLibraryPath(libPath)
+        ortInitErr = ort.InitializeEnvironment()
+    })
+
+    // Если ошибка "already initialized" - это нормально, игнорируем её
+    if ortInitErr != nil && strings.Contains(ortInitErr.Error(), "already been initialized") {
+        return nil
+    }
+    return ortInitErr
 }
 
 // NewSearchEngine — onnxPath: model.onnx, tokenizerPath: tokenizer.json, libPath: libonnxruntime.so
 func NewSearchEngine(onnxPath, tokenizerPath, libPath string, threshold float32) (*SearchEngine, error) {
-	ort.SetSharedLibraryPath(libPath)
-	if err := ort.InitializeEnvironment(); err != nil {
+	// Инициализируем ORT (если ещё не инициализирован)
+	if err := ensureONNXInitialized(libPath); err != nil {
 		return nil, fmt.Errorf("init ORT: %w", err)
 	}
 
 	tk, err := pretrained.FromFile(tokenizerPath)
 	if err != nil {
-		ort.DestroyEnvironment()
 		return nil, fmt.Errorf("load tokenizer: %w", err)
 	}
 
@@ -53,7 +76,6 @@ func NewSearchEngine(onnxPath, tokenizerPath, libPath string, threshold float32)
 		nil,
 	)
 	if err != nil {
-		ort.DestroyEnvironment()
 		return nil, fmt.Errorf("create ONNX session: %w", err)
 	}
 
@@ -61,10 +83,11 @@ func NewSearchEngine(onnxPath, tokenizerPath, libPath string, threshold float32)
 		Tokenizer: tk,
 		Session:   session,
 		threshold: threshold,
+		libPath:   libPath,
 	}
 
 	if err := se.determineHiddenSize(); err != nil {
-		se.Close()
+		se.Session.Destroy() // явно закрываем сессию при ошибке
 		return nil, fmt.Errorf("determine hidden size: %w", err)
 	}
 
@@ -107,13 +130,14 @@ func (se *SearchEngine) determineHiddenSize() error {
 	return nil
 }
 
-// Close — освобождает ресурсы ORT.
+// Close — освобождает ресурсы сессии, НО НЕ УНИЧТОЖАЕТ окружение ORT
 func (se *SearchEngine) Close() error {
 	var err error
 	if se.Session != nil {
 		err = se.Session.Destroy()
+		se.Session = nil
 	}
-	ort.DestroyEnvironment()
+	// НЕ вызываем ort.DestroyEnvironment() - это делается один раз в main
 	return err
 }
 
